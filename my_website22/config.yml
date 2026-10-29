@@ -1,0 +1,9 @@
+tunnel: a892db59-043d-4fc1-afd7-aa9fe6907fc2
+credentials-file: /home/dartc/.cloudflared/a892db59-043d-4fc1-afd7-aa9fe6907fc2.json
+
+ingress:
+  - hostname: dartc.site
+    service: http://localhost:8080
+  - hostname: www.dartc.site
+    service: http://localhost:8080
+  - service: http_status:404

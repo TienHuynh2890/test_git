@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Thu Thập Dữ Liệu Khung Tập Đi - Raspberry Pi</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(100,100,100,0.3);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen transition-colors duration-200">
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Main Outer Container -->
+    <div class="flex flex-col min-h-screen">
+
+        <!-- Top Navigation Bar -->
+        <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <!-- Logo & System Title -->
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-blue-600 text-white rounded-lg shadow-md">
+                        <i class="fa-solid me-0 fa-person-walking-with-cane text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg leading-tight text-gray-900 dark:text-white">Smart Walker Vision AI</h1>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Hệ Thống Thu Thập & Quản Lý Dữ Liệu Đồ Án</p>
+                    </div>
+                </div>
+
+                <!-- Status & Action Badges -->
+                <div class="flex items-center space-x-3 sm:space-x-4">
+                    <!-- Connection Badge -->
+                    <div id="rpiStatusBadge" class="flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse mr-2"></span>
+                        <span id="rpiStatusText">RPI ONLINE</span>
+                    </div>
+
+                    <!-- Theme Toggle Button -->
+                    <button id="themeToggleBtn" class="p-2 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                        <i id="themeIcon" class="fa-solid fa-moon text-lg"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+            <!-- TAB CONTROLS -->
+            <div class="flex border-b border-gray-200 dark:border-gray-700 space-x-6">
+                <button id="tabDashboardBtn" onclick="switchTab('dashboard')" class="pb-3 px-1 text-sm font-semibold border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 flex items-center space-x-2">
+                    <i class="fa-solid fa-chart-line"></i>
+                    <span>Dashboard & Video Stream</span>
+                </button>
+                <button id="tabDataLogBtn" onclick="switchTab('datalog')" class="pb-3 px-1 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center space-x-2">
+                    <i class="fa-solid fa-database"></i>
+                    <span>Kho Dữ Liệu (<span id="dataCountBadge">0</span>)</span>
+                </button>
+                <button id="tabConfigBtn" onclick="switchTab('config')" class="pb-3 px-1 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center space-x-2">
+                    <i class="fa-solid fa-code"></i>
+                    <span>Cấu Hình API & Python Script</span>
+                </button>
+            </div>
+
+            <!-- VIEW 1: DASHBOARD & STREAM -->
+            <div id="viewDashboard" class="space-y-6">
+                
+                <!-- System Metrics Bar -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <!-- Metric 1: FPS -->
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Tốc độ khung hình</p>
+                            <h3 id="fpsMetric" class="text-2xl font-bold text-gray-900 dark:text-white mt-1">28.5 FPS</h3>
+                        </div>
+                        <div class="p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
+                            <i class="fa-solid fa-bolt text-xl"></i>
+                        </div>
+                    </div>
+
+                    <!-- Metric 2: Latency -->
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Độ trễ truyền tải</p>
+                            <h3 id="latencyMetric" class="text-2xl font-bold text-gray-900 dark:text-white mt-1">42 ms</h3>
+                        </div>
+                        <div class="p-3 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg">
+                            <i class="fa-solid fa-network-wired text-xl"></i>
+                        </div>
+                    </div>
+
+                    <!-- Metric 3: Pose State -->
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Trạng thái tư thế</p>
+                            <h3 id="currentPoseMetric" class="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">Bình Thường</h3>
+                        </div>
+                        <div class="p-3 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
+                            <i class="fa-solid fa-user-check text-xl"></i>
+                        </div>
+                    </div>
+
+                    <!-- Metric 4: Total Samples -->
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Mẫu đã thu thập</p>
+                            <h3 id="totalSamplesMetric" class="text-2xl font-bold text-gray-900 dark:text-white mt-1">0</h3>
+                        </div>
+                        <div class="p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg">
+                            <i class="fa-solid fa-folder-open text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Work Area: Stream Video + Labeling Controls -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    
+                    <!-- Left Column: Video Stream View (8 cols) -->
+                    <div class="lg:col-span-8 flex flex-col space-y-4">
+                        <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex-1 flex flex-col">
+                            <div class="flex justify-between items-center mb-3">
+                                <h2 class="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <i class="fa-solid fa-video text-blue-500"></i> Video Stream Real-time (Raspberry Pi Camera)
+                                </h2>
+                                <div class="flex gap-2">
+                                    <button id="toggleOverlayBtn" onclick="toggleOverlay()" class="text-xs px-2.5 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-300 transition">
+                                        <i class="fa-solid fa-bone mr-1"></i> Toggle Pose Mesh
+                                    </button>
+                                    <button onclick="simulateFallAlert()" class="text-xs px-2.5 py-1 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 font-medium hover:bg-red-200 transition">
+                                        <i class="fa-solid fa-triangle-exclamation mr-1"></i> Giả lập Nguy cơ ngã
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Video Box Canvas Container -->
+                            <div class="relative w-full aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center border border-gray-800 shadow-inner group">
+                                <canvas id="streamCanvas" class="w-full h-full object-contain"></canvas>
+                                
+                                <!-- Bounding Box Overlay Details -->
+                                <div id="streamBadgeOverlay" class="absolute top-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-md text-xs font-mono text-white flex items-center gap-2 border border-white/10">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                    <span>IP: <span id="rpiIpDisplay">192.168.1.105:8080</span></span>
+                                    <span class="text-gray-400">|</span>
+                                    <span>CONF: <span id="confidenceDisplay">96.4%</span></span>
+                                </div>
+
+                                <!-- Overlay Alert Box (Hidden by default) -->
+                                <div id="fallWarningOverlay" class="hidden absolute inset-0 bg-red-600/30 backdrop-blur-xs flex items-center justify-center border-4 border-red-600 animate-pulse">
+                                    <div class="bg-red-600 text-white px-6 py-3 rounded-xl shadow-2xl font-bold text-lg flex items-center gap-3">
+                                        <i class="fa-solid fa-triangle-exclamation text-3xl"></i>
+                                        <div>
+                                            <p class="leading-none">CẢNH BÁO: NGUY CƠ MẤT THĂNG BẰNG!</p>
+                                            <p class="text-xs font-normal opacity-90 mt-1">Phát hiện góc nghiêng khung xương > 35°</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Frame Control Toolbar -->
+                            <div class="mt-3 flex flex-wrap items-center justify-between gap-3 bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-lg border border-gray-200 dark:border-gray-700">
+                                <div class="flex items-center space-x-2">
+                                    <button onclick="captureSnapshot()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition flex items-center gap-2 shadow-sm">
+                                        <i class="fa-solid fa-camera"></i> Chụp Khung Ảnh (Capture)
+                                    </button>
+                                    <button id="recordBtn" onclick="toggleRecording()" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium px-3.5 py-2 rounded-lg text-sm transition flex items-center gap-2">
+                                        <i class="fa-solid fa-circle text-red-500"></i> <span id="recordText">Quay Clip Ngắn (3s)</span>
+                                    </button>
+                                </div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                                    <span>Nguồn video:</span>
+                                    <select id="videoSourceSelect" onchange="changeVideoSource(this.value)" class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs">
+                                        <option value="simulated">Mô Phỏng AI Pose Generator</option>
+                                        <option value="webcam">Webcam Trực Tiếp (Local Web)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Data Labeling Form & Live Analytics (4 cols) -->
+                    <div class="lg:col-span-4 flex flex-col space-y-4">
+                        
+                        <!-- Data Labeling Control Box -->
+                        <div class="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
+                            <h2 class="font-semibold text-gray-900 dark:text-white flex items-center gap-2 border-b border-gray-100 dark:border-gray-700 pb-3">
+                                <i class="fa-solid fa-tag text-purple-500"></i> Gãn Nhãn Dữ Liệu (Data Labeling)
+                            </h2>
+
+                            <!-- Label Selector Grid -->
+                            <div>
+                                <label class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 mb-2">Chọn Nhãn Trạng Thái (Label)</label>
+                                <div class="grid grid-cols-2 gap-2" id="labelOptionsGroup">
+                                    <button onclick="selectLabel('Bình thường')" class="label-btn active border-2 border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium p-2.5 rounded-lg text-xs text-left flex items-center justify-between">
+                                        <span>Bình thường</span>
+                                        <i class="fa-solid fa-check text-blue-600"></i>
+                                    </button>
+                                    <button onclick="selectLabel('Nghiêng trái')" class="label-btn border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium p-2.5 rounded-lg text-xs text-left flex items-center justify-between hover:border-gray-300">
+                                        <span>Nghiêng trái</span>
+                                    </button>
+                                    <button onclick="selectLabel('Nghiêng phải')" class="label-btn border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium p-2.5 rounded-lg text-xs text-left flex items-center justify-between hover:border-gray-300">
+                                        <span>Nghiêng phải</span>
+                                    </button>
+                                    <button onclick="selectLabel('Nguy cơ ngã')" class="label-btn border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium p-2.5 rounded-lg text-xs text-left flex items-center justify-between hover:border-gray-300">
+                                        <span>Nguy cơ ngã</span>
+                                    </button>
+                                    <button onclick="selectLabel('Ngồi nghỉ')" class="label-btn border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium p-2.5 rounded-lg text-xs text-left flex items-center justify-between hover:border-gray-300">
+                                        <span>Ngồi nghỉ</span>
+                                    </button>
+                                    <button onclick="selectLabel('Vấp vật cản')" class="label-btn border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium p-2.5 rounded-lg text-xs text-left flex items-center justify-between hover:border-gray-300">
+                                        <span>Vấp vật cản</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Note Input -->
+                            <div>
+                                <label class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1">Ghi Chú Đồ Án / Mẫu Thử</label>
+                                <textarea id="sampleNotes" rows="2" placeholder="Ví dụ: Người tập đi số 1 - Khung bị lệch góc 15 độ..." class="w-full text-xs p-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                            </div>
+
+                            <!-- Action Save Button -->
+                            <button onclick="saveCurrentDataSample()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-lg text-sm transition shadow flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-floppy-disk"></i> Lưu Mẫu Dữ Liệu Này
+                            </button>
+                        </div>
+
+                        <!-- Realtime Angle & Keypoints Monitor -->
+                        <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-3">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Thông Số Tọa Độ Khung Xương (Pose Keypoints)</h3>
+                            
+                            <div class="space-y-2 text-xs font-mono">
+                                <div class="flex justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded border border-gray-100 dark:border-gray-800">
+                                    <span class="text-gray-500">Góc nghiêng cột sống:</span>
+                                    <span id="spineAngleVal" class="font-bold text-blue-600 dark:text-blue-400">4.2°</span>
+                                </div>
+                                <div class="flex justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded border border-gray-100 dark:border-gray-800">
+                                    <span class="text-gray-500">Khoảng cách Chân - Khung:</span>
+                                    <span id="walkerDistVal" class="font-bold text-emerald-600 dark:text-emerald-400">32.8 cm</span>
+                                </div>
+                                <div class="flex justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded border border-gray-100 dark:border-gray-800">
+                                    <span class="text-gray-500">Tâm trọng lực (Center of Gravity):</span>
+                                    <span id="cogVal" class="font-bold text-purple-600 dark:text-purple-400">X: 320, Y: 240</span>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Live Data Chart Section -->
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <h3 class="font-semibold text-gray-900 dark:text-white mb-3 text-sm flex items-center gap-2">
+                        <i class="fa-solid fa-chart-area text-emerald-500"></i> Biểu Đồ Biến Thiên Góc Nghiêng Theo Thời Gian Trực Tiếp (Real-time Spine Angle Tracking)
+                    </h3>
+                    <div class="h-48 w-full">
+                        <canvas id="realtimeChart"></canvas>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- VIEW 2: DATA LOG & MANAGEMENT TABLE -->
+            <div id="viewDataLog" class="hidden space-y-4">
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
+                    
+                    <!-- Table Action Bar -->
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-gray-200 dark:border-gray-700 pb-4">
+                        <div>
+                            <h2 class="font-bold text-lg text-gray-900 dark:text-white">Lịch Sử Mẫu Dữ Liệu Thu Thập</h2>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Danh sách hình ảnh, nhãn dữ liệu và tọa độ được lưu trữ để huấn luyện mô hình</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button onclick="exportCSV()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
+                                <i class="fa-solid fa-file-excel"></i> Xuất CSV
+                            </button>
+                            <button onclick="exportJSON()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
+                                <i class="fa-solid fa-file-code"></i> Xuất JSON Dataset
+                            </button>
+                            <button onclick="clearAllData()" class="px-3 py-1.5 bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-400 hover:bg-red-200 rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
+                                <i class="fa-solid fa-trash-can"></i> Xóa Tất Cả
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Search & Filter Controls -->
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <div class="flex-1 relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+                            <input type="text" id="searchInput" oninput="renderTable()" placeholder="Tìm kiếm theo ID, Ghi chú, Nhãn..." class="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+                        <select id="labelFilter" onchange="renderTable()" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+                            <option value="ALL">Tất cả nhãn</option>
+                            <option value="Bình thường">Bình thường</option>
+                            <option value="Nghiêng trái">Nghiêng trái</option>
+                            <option value="Nghiêng phải">Nghiêng phải</option>
+                            <option value="Nguy cơ ngã">Nguy cơ ngã</option>
+                            <option value="Ngồi nghỉ">Ngồi nghỉ</option>
+                            <option value="Vấp vật cản">Vấp vật cản</option>
+                        </select>
+                    </div>
+
+                    <!-- Table Container -->
+                    <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead class="bg-gray-100 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 uppercase font-semibold">
+                                <tr>
+                                    <th class="p-3">ID Mẫu</th>
+                                    <th class="p-3">Xem Xem Xem Ảnh</th>
+                                    <th class="p-3">Nhãn Trạng Thái</th>
+                                    <th class="p-3">Góc Nghiêng</th>
+                                    <th class="p-3">Thời Gian Chụp</th>
+                                    <th class="p-3">Ghi Chú</th>
+                                    <th class="p-3 text-right">Thao Tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dataLogTableBody" class="divide-y divide-gray-200 dark:divide-gray-700">
+                                <!-- Dynamic rows rendered here -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Empty State Placeholder -->
+                    <div id="emptyTableState" class="hidden py-12 text-center text-gray-400">
+                        <i class="fa-regular fa-folder-open text-4xl mb-2"></i>
+                        <p class="text-sm">Chưa có mẫu dữ liệu nào được thu thập.</p>
+                        <p class="text-xs text-gray-500 mt-1">Chuyển sang tab Dashboard và nhấn "Lưu Mẫu Dữ Liệu Này".</p>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- VIEW 3: API CONFIG & PYTHON CODE SNIPPET -->
+            <div id="viewConfig" class="hidden space-y-6">
+                
+                <!-- API Connection Settings -->
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
+                    <h2 class="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-sliders text-blue-500"></i> Cấu Hình Kết Nối Raspberry Pi
+                    </h2>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Địa chỉ IP Raspberry Pi</label>
+                            <input type="text" id="configRpiIp" value="192.168.1.105" class="w-full text-xs p-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Cổng Kết Nối (Port / WebSocket)</label>
+                            <input type="text" id="configRpiPort" value="8080" class="w-full text-xs p-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-2">
+                        <button onclick="saveApiConfig()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-lg transition">
+                            Lưu Cấu Hình Kết Nối
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Python Snippet Container -->
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
+                                <i class="fa-brands fa-python text-amber-500"></i> Mã Nguồn Python Mẫu Chạy Trên Raspberry Pi
+                            </h2>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Sử dụng OpenCV + MediaPipe/YOLOv8 Pose gửi dữ liệu JSON + Khung ảnh về Website</p>
+                        </div>
+                        <button onclick="copyPythonCode()" class="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 text-gray-800 dark:text-gray-200 text-xs font-medium rounded-lg transition flex items-center gap-1">
+                            <i class="fa-regular fa-copy"></i> Sao Chép Code
+                        </button>
+                    </div>
+
+                    <pre class="bg-gray-900 text-emerald-400 p-4 rounded-xl text-xs font-mono overflow-x-auto leading-relaxed border border-gray-800" id="pythonCodeSnippet">
+<code># ====================================================================
+# ĐỒ ÁN XỬ LÝ ẢNH: KHUNG TẬP ĐỊ TTHÔNG MINH HỖ TRỢ NGƯỜI GIÀ
+# Python Script chạy trên Raspberry Pi 4 / Pi 5 (OpenCV + Requests)
+# ====================================================================
+
+import cv2
+import json
+import time
+import requests
+import base64
+
+# Địa chỉ Web Server thu thập dữ liệu (Thay đổi theo IP máy tính nhận)
+SERVER_URL = "http://192.168.1.100:5000/api/upload_frame"
+
+# Khởi tạo Camera Raspberry Pi
+cap = cv2.VideoCapture(0)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+print("[INFO] Đang khởi động camera Raspberry Pi...")
+
+try:
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # -------------------------------------------------------------
+        # XỬ LÝ ẢNH & POSE ESTIMATION (Ví dụ MediaPipe / YOLOv8-Pose)
+        # -------------------------------------------------------------
+        # Giả lập tính toán tọa độ khung xương người tập đi
+        spine_angle = 4.5  # Độ lệch cột sống so với phương thẳng đứng
+        walker_distance = 35.0 # Khoảng cách từ người tới khung (cm)
+        pose_status = "Bình thường"
+
+        if spine_angle > 25.0:
+            pose_status = "Nguy cơ ngã"
+
+        # Đóng gói Khung ảnh thành Base64 JPEG để truyền API
+        _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
+        jpg_as_text = base64.b64encode(buffer).decode('utf-8')
+
+        # Đóng gói JSON Payload
+        payload = {
+            "device_id": "RaspberryPi_Walker_01",
+            "timestamp": time.time(),
+            "spine_angle": spine_angle,
+            "walker_distance": walker_distance,
+            "detected_pose": pose_status,
+            "confidence": 0.95,
+            "image_base64": f"data:image/jpeg;base64,{jpg_as_text}"
+        }
+
+        # Gửi dữ liệu tới Website
+        try:
+            # response = requests.post(SERVER_URL, json=payload, timeout=0.2)
+            pass # Uncomment khi kết nối Server thực tế
+        except Exception as e:
+            print(f"[ERROR] Lỗi gửi dữ liệu: {e}")
+
+        time.sleep(0.05) # ~20 FPS
+
+except KeyboardInterrupt:
+    print("[INFO] Dừng chương trình.")
+finally:
+    cap.release()
+</code></pre>
+                </div>
+
+            </div>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-4 mt-auto">
+            <div class="max-w-7xl mx-auto px-4 text-center text-xs text-gray-500 dark:text-gray-400">
+                <p>Đồ án tốt nghiệp / NCKH: Khung hỗ trợ người già tập đi ứng dụng Xử Lý Ảnh & AI Pose Estimation</p>
+                <p class="mt-1">Xây dựng trên nền tảng Raspberry Pi & Web Data Collector</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Image Modal Viewer -->
+    <div id="imageModal" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full overflow-hidden shadow-2xl border border-gray-700">
+            <div class="flex justify-between items-center p-3 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="font-bold text-sm text-gray-900 dark:text-white" id="modalTitle">Chi Tiết Mẫu Dữ Liệu</h3>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700 dark:hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-4 space-y-3">
+                <img id="modalImg" src="" class="w-full rounded-lg border border-gray-300 dark:border-gray-700 object-contain max-h-96 bg-black">
+                <div class="text-xs space-y-1 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <p><strong>ID Mẫu:</strong> <span id="modalId">--</span></p>
+                    <p><strong>Nhãn Trạng Thái:</strong> <span id="modalLabel">--</span></p>
+                    <p><strong>Thời gian:</strong> <span id="modalTime">--</span></p>
+                    <p><strong>Ghi chú:</strong> <span id="modalNote">--</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN JAVASCRIPT LOGIC -->
+    <script>
+        // ==========================================
+        // STATE MANAGEMENT & VARIABLES
+        // ==========================================
+        let dataset = JSON.parse(localStorage.getItem('walker_dataset')) || [];
+        let selectedLabel = 'Bình thường';
+        let isShowOverlay = true;
+        let isRecording = false;
+        let videoSource = 'simulated';
+        let localWebcamStream = null;
+        let realtimeChart = null;
+
+        // Simulation parameters
+        let simPoseAngle = 4.2;
+        let simWalkerDist = 32.5;
+        let simPoseState = 'Bình thường';
+        let frameCount = 0;
+        let lastFpsUpdate = Date.now();
+        let calculatedFps = 28.5;
+
+        // ==========================================
+        // INITIALIZATION ON LOAD
+        // ==========================================
+        window.onload = function() {
+            initChart();
+            initCanvasStream();
+            renderTable();
+            updateMetricsUI();
+            initTheme();
+        };
+
+        // Theme Toggle Setup
+        function initTheme() {
+            const toggleBtn = document.getElementById('themeToggleBtn');
+            const themeIcon = document.getElementById('themeIcon');
+            
+            toggleBtn.addEventListener('click', () => {
+                if (document.documentElement.classList.contains('dark')) {
+                    document.documentElement.classList.remove('dark');
+                    themeIcon.className = 'fa-solid fa-sun text-lg text-amber-500';
+                    localStorage.setItem('theme', 'light');
+                } else {
+                    document.documentElement.classList.add('dark');
+                    themeIcon.className = 'fa-solid fa-moon text-lg';
+                    localStorage.setItem('theme', 'dark');
+                }
+            });
+
+            if (localStorage.getItem('theme') === 'light') {
+                document.documentElement.classList.remove('dark');
+                themeIcon.className = 'fa-solid fa-sun text-lg text-amber-500';
+            }
+        }
+
+        // ==========================================
+        // NAVIGATION TAB SWITCHING
+        // ==========================================
+        function switchTab(tab) {
+            document.getElementById('viewDashboard').classList.add('hidden');
+            document.getElementById('viewDataLog').classList.add('hidden');
+            document.getElementById('viewConfig').classList.add('hidden');
+
+            document.getElementById('tabDashboardBtn').className = "pb-3 px-1 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400";
+            document.getElementById('tabDataLogBtn').className = "pb-3 px-1 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400";
+            document.getElementById('tabConfigBtn').className = "pb-3 px-1 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400";
+
+            if (tab === 'dashboard') {
+                document.getElementById('viewDashboard').classList.remove('hidden');
+                document.getElementById('tabDashboardBtn').className = "pb-3 px-1 text-sm font-semibold border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 flex items-center space-x-2";
+            } else if (tab === 'datalog') {
+                document.getElementById('viewDataLog').classList.remove('hidden');
+                document.getElementById('tabDataLogBtn').className = "pb-3 px-1 text-sm font-semibold border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 flex items-center space-x-2";
+                renderTable();
+            } else if (tab === 'config') {
+                document.getElementById('viewConfig').classList.remove('hidden');
+                document.getElementById('tabConfigBtn').className = "pb-3 px-1 text-sm font-semibold border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 flex items-center space-x-2";
+            }
+        }
+
+        // ==========================================
+        // CANVAS STREAM SIMULATOR / WEBCAM DRAWING
+        // ==========================================
+        const canvas = document.getElementById('streamCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 640;
+        canvas.height = 360;
+
+        function initCanvasStream() {
+            function drawLoop() {
+                // Background Frame
+                ctx.fillStyle = '#111827';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                if (videoSource === 'simulated') {
+                    drawSimulatedWalkerPose();
+                } else if (videoSource === 'webcam' && localWebcamStream) {
+                    // Draw webcam image if active
+                    drawWebcamOverlay();
+                }
+
+                // FPS & Latency Update
+                frameCount++;
+                let now = Date.now();
+                if (now - lastFpsUpdate >= 1000) {
+                    calculatedFps = frameCount;
+                    frameCount = 0;
+                    lastFpsUpdate = now;
+                    updateMetricsUI();
+                }
+
+                requestAnimationFrame(drawLoop);
+            }
+            requestAnimationFrame(drawLoop);
+        }
+
+        // Draw Synthetic AI Walker + Person Pose Skeleton
+        function drawSimulatedWalkerPose() {
+            const time = Date.now() * 0.003;
+            
+            // Dynamic subtle movement
+            let bodyX = 320 + Math.sin(time) * 10;
+            let bodyY = 180 + Math.cos(time * 0.8) * 5;
+
+            // Apply slight tilt angle
+            let tilt = Math.sin(time * 0.5) * 4;
+            if (simPoseState === 'Nguy cơ ngã') {
+                tilt = 32.0 + Math.sin(time * 5) * 5; // Large dangerous angle
+            }
+            simPoseAngle = Math.abs(tilt).toFixed(1);
+
+            // Grid background pattern for technical feel
+            ctx.strokeStyle = '#1f2937';
+            ctx.lineWidth = 1;
+            for(let x=0; x<canvas.width; x+=40) {
+                ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x, canvas.height); ctx.stroke();
+            }
+            for(let y=0; y<canvas.height; y+=40) {
+                ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width, y); ctx.stroke();
+            }
+
+            // Draw Walker Frame Structure (Khung tập đi)
+            ctx.strokeStyle = '#9ca3af';
+            ctx.lineWidth = 4;
+            // Handlebars & Legs of the Walker
+            ctx.beginPath();
+            ctx.rect(bodyX - 60, bodyY, 120, 130);
+            ctx.stroke();
+
+            // Joints / Keypoints of Human Pose
+            let head = { x: bodyX + tilt * 2, y: bodyY - 70 };
+            let neck = { x: bodyX + tilt * 1.5, y: bodyY - 40 };
+            let shoulderL = { x: neck.x - 30, y: neck.y + 10 };
+            let shoulderR = { x: neck.x + 30, y: neck.y + 10 };
+            let hipL = { x: neck.x - 20, y: neck.y + 90 };
+            let hipR = { x: neck.x + 20, y: neck.y + 90 };
+            let handL = { x: bodyX - 50, y: bodyY + 20 };
+            let handR = { x: bodyX + 50, y: bodyY + 20 };
+            let footL = { x: hipL.x - 10, y: hipL.y + 80 };
+            let footR = { x: hipR.x + 10, y: hipR.y + 80 };
+
+            if (isShowOverlay) {
+                // Bounding box
+                ctx.strokeStyle = (simPoseState === 'Nguy cơ ngã') ? '#ef4444' : '#10b981';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.strokeRect(head.x - 50, head.y - 20, 100, 260);
+                ctx.setLineDash([]);
+
+                // Pose Connections (Skeleton)
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 3;
+
+                // Spine & Arms
+                drawLine(head, neck);
+                drawLine(neck, shoulderL); drawLine(neck, shoulderR);
+                drawLine(shoulderL, handL); drawLine(shoulderR, handR);
+                drawLine(neck, hipL); drawLine(neck, hipR);
+                drawLine(hipL, footL); drawLine(hipR, footR);
+
+                // Highlight Keypoints (Dots)
+                let points = [head, neck, shoulderL, shoulderR, hipL, hipR, handL, handR, footL, footR];
+                points.forEach(p => {
+                    ctx.fillStyle = '#f59e0b';
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                // Angle Annotation Text
+                ctx.fillStyle = (simPoseState === 'Nguy cơ ngã') ? '#ef4444' : '#10b981';
+                ctx.font = 'bold 12px monospace';
+                ctx.fillText(`Lệch: ${simPoseAngle}°`, head.x + 15, head.y);
+            }
+        }
+
+        function drawLine(p1, p2) {
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+        }
+
+        // ==========================================
+        // DATA LABEL SELECTION & SAVING
+        // ==========================================
+        function selectLabel(labelName) {
+            selectedLabel = labelName;
+            const buttons = document.querySelectorAll('#labelOptionsGroup button');
+            buttons.forEach(btn => {
+                if (btn.innerText.includes(labelName)) {
+                    btn.className = "label-btn active border-2 border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium p-2.5 rounded-lg text-xs text-left flex items-center justify-between";
+                    btn.innerHTML = `<span>${labelName}</span><i class="fa-solid fa-check text-blue-600"></i>`;
+                } else {
+                    btn.className = "label-btn border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium p-2.5 rounded-lg text-xs text-left flex items-center justify-between hover:border-gray-300";
+                    let originalText = btn.innerText.trim();
+                    btn.innerHTML = `<span>${originalText}</span>`;
+                }
+            });
+        }
+
+        function captureSnapshot() {
+            showToast("Đã chụp khung ảnh thành công!", "info");
+        }
+
+        function saveCurrentDataSample() {
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            const notes = document.getElementById('sampleNotes').value.trim();
+
+            const newSample = {
+                id: 'SAMP_' + Date.now().toString().slice(-6),
+                timestamp: new Date().toLocaleString('vi-VN'),
+                label: selectedLabel,
+                angle: simPoseAngle + '°',
+                notes: notes || 'Không có ghi chú',
+                image: dataUrl
+            };
+
+            dataset.unshift(newSample);
+            localStorage.setItem('walker_dataset', JSON.stringify(dataset));
+            
+            // Clear input note
+            document.getElementById('sampleNotes').value = '';
+
+            // Update UI Counters
+            updateMetricsUI();
+            showToast(`Đã lưu mẫu dữ liệu [${newSample.id}] với nhãn "${selectedLabel}"`, "success");
+        }
+
+        // ==========================================
+        // UI METRICS & TABLE RENDER
+        // ==========================================
+        function updateMetricsUI() {
+            document.getElementById('totalSamplesMetric').innerText = dataset.length;
+            document.getElementById('dataCountBadge').innerText = dataset.length;
+            document.getElementById('fpsMetric').innerText = calculatedFps.toFixed(1) + " FPS";
+            document.getElementById('spineAngleVal').innerText = simPoseAngle + "°";
+            document.getElementById('currentPoseMetric').innerText = simPoseState;
+
+            if (simPoseState === 'Nguy cơ ngã') {
+                document.getElementById('currentPoseMetric').className = 'text-xl font-bold text-red-600 dark:text-red-400 mt-1';
+            } else {
+                document.getElementById('currentPoseMetric').className = 'text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1';
+            }
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('dataLogTableBody');
+            const searchVal = document.getElementById('searchInput').value.toLowerCase();
+            const filterLabel = document.getElementById('labelFilter').value;
+            const emptyState = document.getElementById('emptyTableState');
+
+            tbody.innerHTML = '';
+
+            let filtered = dataset.filter(item => {
+                let matchSearch = item.id.toLowerCase().includes(searchVal) || 
+                                  item.notes.toLowerCase().includes(searchVal) ||
+                                  item.label.toLowerCase().includes(searchVal);
+                let matchFilter = (filterLabel === 'ALL') || (item.label === filterLabel);
+                return matchSearch && matchFilter;
+            });
+
+            if (filtered.length === 0) {
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            filtered.forEach(item => {
+                let badgeColor = "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
+                if (item.label === 'Nguy cơ ngã') badgeColor = "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300";
+                if (item.label === 'Ngồi nghỉ') badgeColor = "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300";
+
+                let tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 dark:hover:bg-gray-700/30 transition";
+                tr.innerHTML = `
+                    <td class="p-3 font-mono font-medium text-gray-900 dark:text-white">${item.id}</td>
+                    <td class="p-3">
+                        <img src="${item.image}" onclick="openModal('${item.id}')" class="w-12 h-8 object-cover rounded border border-gray-300 dark:border-gray-600 cursor-pointer hover:opacity-80 transition">
+                    </td>
+                    <td class="p-3">
+                        <span class="px-2 py-0.5 rounded text-xs font-semibold ${badgeColor}">${item.label}</span>
+                    </td>
+                    <td class="p-3 font-mono">${item.angle}</td>
+                    <td class="p-3 text-gray-500 dark:text-gray-400">${item.timestamp}</td>
+                    <td class="p-3 max-w-xs truncate text-gray-600 dark:text-gray-300">${item.notes}</td>
+                    <td class="p-3 text-right space-x-2">
+                        <button onclick="openModal('${item.id}')" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 p-1">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                        <button onclick="deleteSample('${item.id}')" class="text-red-600 hover:text-red-800 dark:text-red-400 p-1">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function deleteSample(id) {
+            dataset = dataset.filter(x => x.id !== id);
+            localStorage.setItem('walker_dataset', JSON.stringify(dataset));
+            renderTable();
+            updateMetricsUI();
+            showToast(`Đã xóa mẫu ${id}`, "info");
+        }
+
+        function clearAllData() {
+            if (confirm("Bạn có chắc chắn muốn xóa toàn bộ dataset đã lưu không?")) {
+                dataset = [];
+                localStorage.removeItem('walker_dataset');
+                renderTable();
+                updateMetricsUI();
+                showToast("Đã xóa toàn bộ kho dữ liệu", "info");
+            }
+        }
+
+        // ==========================================
+        // EXPORT DATASET (JSON / CSV)
+        // ==========================================
+        function exportJSON() {
+            if (dataset.length === 0) {
+                showToast("Tệp dữ liệu trống!", "warning");
+                return;
+            }
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataset, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `walker_dataset_${Date.now()}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast("Đã tải xuống tập dữ liệu JSON!", "success");
+        }
+
+        function exportCSV() {
+            if (dataset.length === 0) {
+                showToast("Tệp dữ liệu trống!", "warning");
+                return;
+            }
+            let csvContent = "data:text/csv;charset=utf-8,ID,Timestamp,Label,Angle,Notes\n";
+            dataset.forEach(row => {
+                csvContent += `"${row.id}","${row.timestamp}","${row.label}","${row.angle}","${row.notes}"\n`;
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `walker_dataset_${Date.now()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            showToast("Đã xuất danh sách mẫu CSV!", "success");
+        }
+
+        // ==========================================
+        // REALTIME CHART.JS INITIALIZATION
+        // ==========================================
+        function initChart() {
+            const ctxChart = document.getElementById('realtimeChart').getContext('2d');
+            
+            const labels = Array.from({length: 20}, (_, i) => `${i}s`);
+            const initialData = Array.from({length: 20}, () => 4 + Math.random() * 2);
+
+            realtimeChart = new Chart(ctxChart, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Góc Nghiêng Cột Sống (°)',
+                        data: initialData,
+                        borderColor: '#0284c7',
+                        backgroundColor: 'rgba(2, 132, 199, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            min: 0,
+                            max: 45,
+                            grid: { color: 'rgba(156, 163, 175, 0.1)' }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+
+            // Chart Real-time Push Loop
+            setInterval(() => {
+                if (realtimeChart) {
+                    realtimeChart.data.datasets[0].data.shift();
+                    realtimeChart.data.datasets[0].data.push(parseFloat(simPoseAngle));
+                    realtimeChart.update('none');
+                }
+            }, 500);
+        }
+
+        // ==========================================
+        // MODAL & UTILS
+        // ==========================================
+        function openModal(id) {
+            const sample = dataset.find(s => s.id === id);
+            if (!sample) return;
+
+            document.getElementById('modalTitle').innerText = `Mẫu Dữ Liệu: ${sample.id}`;
+            document.getElementById('modalImg').src = sample.image;
+            document.getElementById('modalId').innerText = sample.id;
+            document.getElementById('modalLabel').innerText = sample.label;
+            document.getElementById('modalTime').innerText = sample.timestamp;
+            document.getElementById('modalNote').innerText = sample.notes;
+
+            document.getElementById('imageModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('imageModal').classList.add('hidden');
+        }
+
+        function toggleOverlay() {
+            isShowOverlay = !isShowOverlay;
+            showToast(isShowOverlay ? "Đã bật Overlay Pose" : "Đã tắt Overlay Pose", "info");
+        }
+
+        function simulateFallAlert() {
+            simPoseState = 'Nguy cơ ngã';
+            document.getElementById('fallWarningOverlay').classList.remove('hidden');
+            showToast("CẢNH BÁO: Phát hiện nguy cơ ngã!", "warning");
+
+            setTimeout(() => {
+                simPoseState = 'Bình thường';
+                document.getElementById('fallWarningOverlay').classList.add('hidden');
+            }, 3000);
+        }
+
+        function toggleRecording() {
+            const btnText = document.getElementById('recordText');
+            if (!isRecording) {
+                isRecording = true;
+                btnText.innerText = "Đang Quay... (3s)";
+                showToast("Bắt đầu quay clip ngắn...", "info");
+                setTimeout(() => {
+                    isRecording = false;
+                    btnText.innerText = "Quay Clip Ngắn (3s)";
+                    saveCurrentDataSample();
+                }, 3000);
+            }
+        }
+
+        function saveApiConfig() {
+            const ip = document.getElementById('configRpiIp').value;
+            const port = document.getElementById('configRpiPort').value;
+            document.getElementById('rpiIpDisplay').innerText = `${ip}:${port}`;
+            showToast("Đã lưu cấu hình IP Raspberry Pi!", "success");
+        }
+
+        function copyPythonCode() {
+            const codeText = document.getElementById('pythonCodeSnippet').innerText;
+            navigator.clipboard.writeText(codeText).then(() => {
+                showToast("Đã sao chép mã nguồn Python vào Clipboard!", "success");
+            }).catch(() => {
+                // Fallback for document.execCommand if iframe restricted
+                const textarea = document.createElement('textarea');
+                textarea.value = codeText;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showToast("Đã sao chép mã nguồn Python!", "success");
+            });
+        }
+
+        function showToast(msg, type = "info") {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            let bg = "bg-blue-600";
+            if (type === "success") bg = "bg-emerald-600";
+            if (type === "warning") bg = "bg-red-600";
+
+            toast.className = `${bg} text-white text-xs font-medium px-4 py-2.5 rounded-lg shadow-lg pointer-events-auto flex items-center gap-2 animate-bounce`;
+            toast.innerHTML = `<i class="fa-solid fa-circle-info"></i> ${msg}`;
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.remove();
+            }, 2500);
+        }
+
+        function changeVideoSource(val) {
+            videoSource = val;
+            if (val === 'webcam') {
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(stream => {
+                        localWebcamStream = stream;
+                        showToast("Đã kết nối Webcam máy tính!", "success");
+                    })
+                    .catch(err => {
+                        showToast("Không thể truy cập Webcam!", "warning");
+                        document.getElementById('videoSourceSelect').value = 'simulated';
+                        videoSource = 'simulated';
+                    });
+                }
+            } else {
+                if (localWebcamStream) {
+                    localWebcamStream.getTracks().forEach(track => track.stop());
+                    localWebcamStream = null;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
