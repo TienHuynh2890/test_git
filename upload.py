@@ -20,7 +20,7 @@ def git_auto_push():
             print(f"Lỗi: {result.stderr}")
             break
     else:
-        print("Đã hoàn tất push code thành công")
+        print("Đã hoàn tất push code thành công.")
 
 if __name__ == "__main__":
     git_auto_push()
