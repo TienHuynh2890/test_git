@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nút Gửi Dữ Liệu Về Raspberry Pi</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 100px; background-color: #f4f4f9; }
+        button { padding: 15px 30px; font-size: 20px; background-color: #d32f2f; color: white; border: none; border-radius: 8px; cursor: pointer; }
+        button:hover { background-color: #b71c1c; }
+        #result { margin-top: 20px; font-size: 18px; font-weight: bold; color: #333; }
+    </style>
+</head>
+<body>
+
+    <h2>Hệ thống nút bấm trên Raspberry Pi 3B</h2>
+    <button id="myButton">Bấm vào đây!</button>
+    <p id="result"></p>
+
+    <script>
+        document.getElementById('myButton').addEventListener('click', async () => {
+            const resultElement = document.getElementById('result');
+            resultElement.innerText = 'Đang gửi tín hiệu tới Raspberry Pi...';
+
+            try {
+                const response = await fetch('/api/click', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ time: new Date().toISOString() })
+                });
+
+                const data = await response.json();
+                resultElement.innerText = data.message;
+            } catch (error) {
+                resultElement.innerText = 'Lỗi kết nối tới Raspberry Pi!';
+                console.error(error);
+            }
+        });
+    </script>
+
+</body>
+</html>
